@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="format-detection" content="telephone=no,email=no,address=no" />
+  <title>Calendario Prenotazioni 2025 - Vista Settimanale</title>
+  <style>
+    :root{--card-bg:#fff;--accent:#28a745;--muted:#666;}
+    body{font-family:Inter,Arial,Helvetica,sans-serif;background:#f4f6f8;color:#222;margin:0;padding:20px;}
+    .container{max-width:1100px;margin:0 auto;}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;}
+    h1{margin:0;font-size:20px;}
+    .controls{display:flex;gap:8px;align-items:center;}
+    button{background:var(--accent);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;}
+    button.secondary{background:#0069d9;}
+    .card{background:var(--card-bg);padding:16px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.06);margin-bottom:16px;}
+    .week-info{display:flex;align-items:center;gap:16px;}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px;align-items:start;}
+    .times{font-size:14px;color:var(--muted);}
+    table{width:100%;border-collapse:collapse;}
+    th,td{border:1px solid #e0e6ea;padding:8px;text-align:center;}
+    th{background:#f1f5f8;font-weight:600;}
+    
+    td.available{background:#eaf6ec;color:#064e2a;cursor:pointer;}
+    td.booked{background:#fdecea;color:#6c1414;cursor:pointer;}
+    .selected{outline:3px solid #ffd54d;}
+    form.inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+    input,select,textarea{padding:8px;border-radius:6px;border:1px solid #ccd6dd;background:#fff;}
+    input[type="time"]{padding:6px;}
+    .admin{margin-top:12px;}
+    .note{font-size:13px;color:#555;margin-top:8px;}
+    .flex{display:flex;gap:8px;align-items:center;}
+    footer{font-size:13px;color:#666;margin-top:8px;text-align:center;}
+    /* Banner per webview WhatsApp */
+    .ua-warning{display:none;position:sticky;top:0;z-index:9999;background:#fff3cd;color:#7a5a00;border:1px solid #ffe69c;border-radius:8px;padding:10px 12px;margin-bottom:12px;}
+    .ua-warning strong{font-weight:700;}
+    /* Modal cancellazione */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:10000;}
+    .modal{background:#fff;border-radius:12px;max-width:520px;width:92%;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,0.2);}
+    .modal h3{margin:0 0 8px 0;font-size:18px}
+    .modal .flex{justify-content:space-between}
+    @media(max-width:880px){
+      .grid{grid-template-columns:1fr;}
+    }
+    .hidden{display:none;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="uaWarning" class="ua-warning">
+      <strong>Apri in Safari</strong>: sembra tu stia aprendo questo calendario dentro WhatsApp. Per la migliore esperienza e per evitare messaggi aggiuntivi, usa il pulsante ⋯ e scegli "Apri in Safari".
+    </div>
+    <!-- Modal cancellazione prenotazione -->
+    <div id="delModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+      <div class="modal">
+        <h3>Elimina prenotazione</h3>
+        <p id="delInfo" class="note"></p>
+        <div class="flex" style="gap:8px;flex-wrap:wrap;margin-top:8px;">
+          <input id="delEmail" type="email" placeholder="Email cliente" style="flex:1;min-width:180px" />
+          <input id="delPhone" type="tel" placeholder="Telefono cliente" style="flex:1;min-width:160px" />
+          <input id="delAdminPass" type="password" placeholder="Password admin" style="flex:1;min-width:160px" />
+        </div>
+        <div id="delError" class="note" style="color:#a33;height:18px;margin-top:6px;"></div>
+        <div class="flex" style="justify-content:flex-end;margin-top:12px;gap:8px;">
+          <button id="delCancel" type="button" class="secondary">Annulla</button>
+          <button id="delConfirm" type="button" style="background:#d9534f">Elimina</button>
+        </div>
+      </div>
+    </div>
+    <div id="errBanner" style="display:none;position:sticky;top:0;z-index:10001;background:#fdecea;color:#6c1414;border:1px solid #f5c2c7;border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:13px;"></div>
+    <header>
+      <h1>Calendario Prenotazioni 2025 — Vista Settimanale</h1>
+      <div class="controls">
+        <div class="week-info card" id="weekCard">
+          <strong id="weekLabel"></strong><div class="note" id="weekRange"></div>
+        </div>
+        <div>
+          <button id="prevWeek">&larr; Settimana precedente</button>
+          <button id="nextWeek" class="secondary">Settimana successiva &rarr;</button>
+          <button id="thisWeek" style="background:#17a2b8">Settimana corrente</button>
+          <button id="toggleAdmin" style="background:#343a40">Admin</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="card">
+      <div style="display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+        <div>
+          <strong>Seleziona uno slot dalla griglia (Lun–Ven)</strong>
+          <div class="note">Disponibilità predefinite: Lun/Mer/Gio: 09:00–12:30 e 15:00–19:00; Mar/Ven: 09:00–12:30.</div>
+        </div>
+        <div style="min-width:300px;">
+          <form id="bookingForm" class="inline" onsubmit="return false;">
+            <input id="name" placeholder="Nome e Cognome" required />
+            <input id="phone" type="tel" placeholder="Cellulare" />
+            <input id="email" type="email" placeholder="Email" required />
+            <select id="duration">
+              <option value="30">30 min</option>
+              <option value="60">60 min</option>
+            </select>
+            <textarea id="reason" placeholder="Note (opzionali)" rows="1" style="min-width:160px"></textarea>
+            <button id="confirmBooking">Conferma</button>
+          </form>
+          <div id="selectedInfo" class="note"></div>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:16px;">
+        <div style="overflow:auto;">
+          <table id="calendarTable">
+            <!-- generated -->
+          </table>
+        </div>
+      </div>
+
+      <div class="note">Clicca su uno slot verde per selezionarlo. La prenotazione blocca i blocchi da 30 minuti necessari per la durata scelta. Per cancellare una prenotazione clicca su una cella rossa: come admin usa la password, come cliente inserisci la tua email.</div>
+    </div>
+
+    <div class="card" id="lookupCard">
+      <h3>Recupera prenotazione</h3>
+      <form id="lookupContactForm" class="inline" onsubmit="return false;">
+        <input id="lookupContact" placeholder="Email o cellulare" required />
+        <button id="lookupContactBtn" class="secondary">Cerca</button>
+      </form>
+      <div id="lookupContactResult" class="note"></div>
+      <div class="note">Inserisci la tua email o il tuo cellulare per vedere data e orario della prenotazione.</div>
+    </div>
+
+    <div id="adminCard" class="card admin hidden">
+      <h3>Admin — Modifica disponibilità (solo tu)</h3>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+        <input id="adminPassword" type="password" placeholder="Password admin" />
+        <select id="adminDay">
+          <option>Lunedì</option><option>Martedì</option><option>Mercoledì</option><option>Giovedì</option><option>Venerdì</option>
+        </select>
+        <label style="display:flex;gap:8px;align-items:center;"><span>Inizio</span><input id="adminStart" type="time" /></label>
+        <label style="display:flex;gap:8px;align-items:center;"><span>Fine</span><input id="adminEnd" type="time" /></label>
+        <label style="display:flex;gap:8px;align-items:center;"><span>Inizio 2</span><input id="adminStart2" type="time" /></label>
+        <label style="display:flex;gap:8px;align-items:center;"><span>Fine 2</span><input id="adminEnd2" type="time" /></label>
+        <label class="flex"><input id="adminWeekOnly" type="checkbox" checked /> <span>Solo questa settimana</span></label>
+        <button id="updateAvail">Aggiorna</button>
+        <button id="resetWeek" style="background:#6c757d;">Reset settimana corrente</button>
+        <button id="resetDefault" style="background:#d9534f;">Reset default</button>
+      </div>
+      <div class="note">Le modifiche sono salvate nel browser (localStorage). Se vuoi sincronizzare tra dispositivi servirà un server.</div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button id="toggleBookings" style="background:#343a40">Mostra prenotazioni</button>
+        <input id="bkFilter" placeholder="Filtra per nome/email/telefono" style="flex:1;min-width:220px" />
+        <button id="bkRefresh" class="secondary">Aggiorna elenco</button>
+        <button id="bkExportCsv" style="background:#17a2b8">Esporta CSV</button>
+      </div>
+      <div id="adminBookings" class="hidden" style="margin-top:8px;">
+        <div style="overflow:auto;max-height:420px;border:1px solid #e0e6ea;border-radius:8px;">
+          <table id="bkTable" style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Giorno</th>
+                <th>Ora inizio</th>
+                <th>Durata</th>
+                <th>Nome</th>
+                <th>Email</th>
+                <th>Telefono</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="note">Visibile solo con password admin corretta.</div>
+      </div>
+    </div>
+
+    <footer class="card">
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;align-items:center;">
+        <div></div>
+        <div><button id="exportBtn" style="background:#343a40">Esporta prenotazioni (JSON)</button></div>
+      </div>
+    </footer>
+  </div>
+
+<script>
+/* Safe localStorage fallback (iOS Private/WhatsApp WebView) */
+(function(){
+  var ok = true; var mem = {};
+  try {
+    var t='__ls_test__'+Date.now();
+    localStorage.setItem(t,'1');
+    localStorage.removeItem(t);
+  } catch(e){ ok = false; }
+  if(!ok){
+    try { window.localStorage = { getItem: function(k){ return (k in mem)? mem[k] : null; }, setItem: function(k,v){ mem[k]=String(v); }, removeItem: function(k){ delete mem[k]; } }; }
+    catch(e){}
+  }
+})();
+
+/* Utility date helpers */
+function startOfISOWeek(date){ // Monday as first day
+  const d = new Date(date);
+  const day = (d.getDay()+6)%7; // 0 = Monday
+  d.setDate(d.getDate() - day);
+  d.setHours(0,0,0,0);
+  return d;
+}
+function addDays(d, n){ const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function formatDate(d){ const y=d.getFullYear(), m=(d.getMonth()+1).toString().padStart(2,'0'), day=d.getDate().toString().padStart(2,'0'); return `${y}-${m}-${day}`; }
+function formatLabel(d){ const opts={day:'2-digit',month:'2-digit',year:'numeric'}; return d.toLocaleDateString('it-IT',opts); }
+function weekNumber(d){ const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); tmp.setUTCDate(tmp.getUTCDate()+4 - (tmp.getUTCDay()||7)); const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(),0,1)); return Math.ceil((((tmp - yearStart) / 86400000) + 1)/7); }
+
+/* merge slots for a day that may have one or two intervals */
+function daySlots(av){
+  if(!av) return [];
+  // backward compatible: [start,end] or [[s1,e1],[s2,e2]]
+  if(typeof av[0]==='string'){
+    return generateSlots(av[0], av[1]);
+  }
+  const out = [];
+  (av||[]).forEach(r=>{ if(r && r[0] && r[1]) generateSlots(r[0], r[1]).forEach(s=>out.push(s)); });
+  return Array.from(new Set(out)).sort((a,b)=>a.localeCompare(b));
+}
+
+/* Default availability pattern for weekdays (Mon-Fri) */
+const DEFAULT_AVAIL = {
+  "Lunedì": [["09:00","12:30"],["15:00","19:00"]],
+  "Martedì": ["09:00","12:30"],
+  "Mercoledì": [["09:00","12:30"],["15:00","19:00"]],
+  "Giovedì": [["09:00","12:30"],["15:00","19:00"]],
+  "Venerdì": ["09:00","12:30"]
+};
+
+const STORAGE_KEY_AVAIL = 'avail_2025_v1';
+const STORAGE_KEY_AVAIL_WEEK = 'avail_2025_week_v1';
+const STORAGE_KEY_BOOK = 'bookings_2025_v1';
+
+/* load or init availabilities and bookings */
+function loadState(){
+  const raw = localStorage.getItem(STORAGE_KEY_AVAIL);
+  const rawWeek = localStorage.getItem(STORAGE_KEY_AVAIL_WEEK);
+  if(raw){
+    try{ return {avail: JSON.parse(raw), weekOverrides: JSON.parse(rawWeek||'{}'), bookings: JSON.parse(localStorage.getItem(STORAGE_KEY_BOOK)||'{}')}; }
+    catch(e){}
+  }
+  // build avail from defaults for each weekday with full 2025 mapping
+  const avail = {};
+  Object.keys(DEFAULT_AVAIL).forEach(day=>{
+    const defv = DEFAULT_AVAIL[day];
+    avail[day] = Array.isArray(defv) && typeof defv[0]==='string' ? defv.slice() : JSON.parse(JSON.stringify(defv));
+  });
+  localStorage.setItem(STORAGE_KEY_AVAIL, JSON.stringify(avail));
+  localStorage.setItem(STORAGE_KEY_AVAIL_WEEK, JSON.stringify({}));
+  localStorage.setItem(STORAGE_KEY_BOOK, JSON.stringify({}));
+  return {avail, weekOverrides:{}, bookings:{}};
+}
+
+let state = loadState();
+
+/* generate 30-min slots from start to end times (strings "HH:MM") */
+function generateSlots(start, end){
+  const slots = [];
+  const [sh,sm]=start.split(':').map(Number);
+  const [eh,em]=end.split(':').map(Number);
+  let totalStart = sh*60+sm;
+  let totalEnd = eh*60+em;
+  for(let t=totalStart;t<totalEnd;t+=30){
+    const h=Math.floor(t/60).toString().padStart(2,'0');
+    const m=(t%60).toString().padStart(2,'0');
+    slots.push(`${h}:${m}`);
+  }
+  return slots;
+}
+
+/* Booking storage structure:
+   bookings: { "2025-01-06": {"Lunedì_09:00": {name,email,duration,reason,created}}, ... }
+   but simpler: bookings[date][day_time_key]=true/object
+*/
+let bookings = state.bookings; // object
+
+/* week cursor: start with first week of 2025 (Mon Jan 6 2025 is week? but we'll allow weeks from Jan 1)
+   We'll set minDate = 2025-01-01, maxDate = 2025-12-31
+*/
+const MIN_DATE = new Date(2025,0,1);
+const MAX_DATE = new Date(2025,11,31);
+
+let currentWeekStart = startOfISOWeek(new Date(2025,0,1)); // first Monday on/after Jan 1 2025
+
+function clampWeekStart(d){
+  let s = startOfISOWeek(d);
+  if(s < startOfISOWeek(MIN_DATE)) s = startOfISOWeek(MIN_DATE);
+  const maxStart = startOfISOWeek(MAX_DATE);
+  if(s > maxStart) s = maxStart;
+  return s;
+}
+
+/* UI render functions */
+function renderWeekInfo(){
+  const weekLabel = document.getElementById('weekLabel');
+  const weekRange = document.getElementById('weekRange');
+  const num = weekNumber(currentWeekStart);
+  weekLabel.textContent = `Settimana ${num} - 2025`;
+  const from = formatLabel(currentWeekStart);
+  const to = formatLabel(addDays(currentWeekStart,4));
+  weekRange.textContent = `${from} — ${to}`;
+}
+
+function buildWeekDays(){
+  // returns array of objects [{label:"Lunedì",date:Date, ymd:"2025-01-06"}, ...] for Mon-Fri
+  const days=['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì'];
+  return days.map((name,idx)=>{
+    const d = addDays(currentWeekStart, idx);
+    return {name, date:d, ymd: formatDate(d)};
+  });
+}
+
+function renderTimesColumn(slotTimes){
+  const body = document.getElementById('timesBody');
+  body.innerHTML = '';
+  slotTimes.forEach(time=>{
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.className='timecell';
+    td.textContent = time;
+    tr.appendChild(td);
+    body.appendChild(tr);
+  });
+}
+
+function getWeekKey(d){
+  return formatDate(startOfISOWeek(d));
+}
+
+function dayAvail(dayObj){
+  const wk = getWeekKey(dayObj.date);
+  const w = state.weekOverrides && state.weekOverrides[wk];
+  if(w && w[dayObj.name]) return w[dayObj.name];
+  return state.avail[dayObj.name];
+}
+
+function renderCalendar(){
+  renderWeekInfo();
+  const weekDays = buildWeekDays();
+  // build full set of slot times union across weekdays
+  const timesUnion = new Set();
+  weekDays.forEach(d=>{
+    const av = dayAvail(d);
+    daySlots(av).forEach(s=>timesUnion.add(s));
+  });
+  let slotTimes = Array.from(timesUnion).sort((a,b)=>a.localeCompare(b));
+  // Self-heal: if no slots computed, reinit defaults (iOS storage quirks)
+  if(slotTimes.length===0){
+    try {
+      state.avail = JSON.parse(JSON.stringify(DEFAULT_AVAIL));
+      localStorage.setItem(STORAGE_KEY_AVAIL, JSON.stringify(state.avail));
+    } catch {}
+    const _times = new Set();
+    weekDays.forEach(d=>{ daySlots(dayAvail(d)).forEach(s=>_times.add(s)); });
+    slotTimes = Array.from(_times).sort((a,b)=>a.localeCompare(b));
+  }
+  // no left times column
+
+  // build header
+  const cal = document.getElementById('calendarTable');
+  cal.innerHTML = '';
+  const thead = document.createElement('thead');
+  const htr = document.createElement('tr');
+  weekDays.forEach(d=>{
+    const th = document.createElement('th');
+    th.innerHTML = `<div style="font-weight:700">${d.name}</div><div style="font-size:12px;color:#666">${formatLabel(d.date)}</div>`;
+    htr.appendChild(th);
+  });
+  thead.appendChild(htr);
+  cal.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  if(slotTimes.length===0){
+    const row = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = weekDays.length;
+    td.className = 'note';
+    td.textContent = 'Nessuna disponibilità visibile. Ricarica la pagina o apri in Safari.';
+    row.appendChild(td);
+    tbody.appendChild(row);
+    cal.appendChild(tbody);
+    return;
+  }
+  slotTimes.forEach(time=>{
+    const row = document.createElement('tr');
+    weekDays.forEach(d=>{
+      const cell = document.createElement('td');
+      const avail = dayAvail(d);
+      // check if this time exists in that day's slots
+      let isAvailable=false;
+      const slots = daySlots(avail);
+      if(slots.indexOf(time) !== -1) isAvailable = true;
+      const key = `${d.ymd}_${d.name}_${time}`;
+      if(bookings[key]){
+        cell.className='booked';
+        cell.textContent = `${time} — n.d.`;
+        cell.onclick = ()=>onBookedCellClick(d, time);
+      } else if(isAvailable){
+        cell.className='available';
+        cell.textContent=time;
+        cell.onclick = (e)=>selectSlot(key, d, time, e.currentTarget);
+      } else {
+        cell.textContent='';
+      }
+      row.appendChild(cell);
+    });
+    tbody.appendChild(row);
+  });
+  cal.appendChild(tbody);
+}
+
+  /* selection handling */
+  let currentSelection = null;
+  let currentSelectedCell = null;
+  function selectSlot(key, dayObj, time, cellEl){
+    clearSelection();
+    currentSelection = {key, dayObj, time};
+    currentSelectedCell = cellEl;
+    if(currentSelectedCell) currentSelectedCell.classList.add('selected');
+    const info = document.getElementById('selectedInfo');
+    info.textContent = `${dayObj.name} ${formatLabel(dayObj.date)} alle ${time}`;
+    document.getElementById('name').focus();
+  }
+
+/* confirm booking */
+  document.getElementById('confirmBooking').addEventListener('click', (e)=>{
+    e.preventDefault();
+    if(!currentSelection) return alert('Seleziona prima uno slot dal calendario.');
+    const name = document.getElementById('name').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const duration = parseInt(document.getElementById('duration').value,10);
+    const reason = document.getElementById('reason').value.trim();
+    if(!name || !email) return alert('Inserisci nome e email.');
+    // compute consecutive slots needed
+    const day = currentSelection.dayObj;
+    const baseSlots = daySlots(dayAvail(day));
+    const startIndex = baseSlots.indexOf(currentSelection.time);
+    if(startIndex === -1) return alert('Slot non valido.');
+    const needed = duration/30;
+    // check availability for all
+    for(let i=0;i<needed;i++){
+      const t = baseSlots[startIndex + i];
+      if(!t) return alert('La durata supera la disponibilità di quel giorno.');
+      const key = `${day.ymd}_${day.name}_${t}`;
+      if(bookings[key]) return alert('Uno degli slot necessari è già prenotato.');
+    }
+    // book them
+    const created = new Date().toISOString();
+    for(let i=0;i<needed;i++){
+      const t = baseSlots[startIndex + i];
+      const key = `${day.ymd}_${day.name}_${t}`;
+      bookings[key] = {name, phone, email, duration, reason, created};
+    }
+    // persist and update UI regardless of share outcome
+    try { localStorage.setItem(STORAGE_KEY_BOOK, JSON.stringify(bookings)); } catch {}
+    alert('Prenotazione confermata!');
+    renderCalendar();
+    document.getElementById('bookingForm').reset();
+    clearSelection();
+  });
+
+/* clear visual selection */
+  function clearSelection(){
+    document.querySelectorAll('.selected').forEach(el=>el.classList.remove('selected'));
+    currentSelection = null;
+    currentSelectedCell = null;
+    const info = document.getElementById('selectedInfo');
+    if(info) info.textContent = '';
+  }
+
+  function getBookingBlock(dayObj, time){
+    const slots = daySlots(dayAvail(dayObj));
+    const idx = slots.indexOf(time);
+    if(idx === -1) return {keys:[], booking:null};
+    const baseKey = `${dayObj.ymd}_${dayObj.name}_${time}`;
+    const baseBooking = bookings[baseKey];
+    if(!baseBooking) return {keys:[], booking:null};
+    const match = (k)=>{
+      const b = bookings[k];
+      if(!b) return false;
+      return b.email===baseBooking.email && b.created===baseBooking.created;
+    };
+    const keys = [];
+    // expand left
+    let i = idx;
+    while(i>=0){
+      const k = `${dayObj.ymd}_${dayObj.name}_${slots[i]}`;
+      if(match(k)) { keys.unshift(k); i--; } else { break; }
+    }
+    // expand right
+    i = idx+1;
+    while(i<slots.length){
+      const k = `${dayObj.ymd}_${dayObj.name}_${slots[i]}`;
+      if(match(k)) { keys.push(k); i++; } else { break; }
+    }
+    return {keys, booking: baseBooking};
+  }
+
+  /* Modal-based delete flow (mobile friendly) */
+  let __delCtx = null;
+  function showDeleteModal(dayObj, time){
+    const ctx = getBookingBlock(dayObj, time);
+    if(!ctx.booking || ctx.keys.length===0) return;
+    __delCtx = { dayObj, time, keys: ctx.keys, booking: ctx.booking };
+    const m = document.getElementById('delModal');
+    const info = document.getElementById('delInfo');
+    const err = document.getElementById('delError');
+    const email = document.getElementById('delEmail');
+    const phone = document.getElementById('delPhone');
+    const pass = document.getElementById('delAdminPass');
+    info.textContent = `${dayObj.name} ${formatLabel(dayObj.date)} — blocchi: ${ctx.keys.length}`;
+    err.textContent = '';
+    email.value = '';
+    if (phone) phone.value = '';
+    pass.value = '';
+    m.classList.remove('hidden');
+    setTimeout(()=>{ email.focus(); }, 0);
+  }
+  function hideDeleteModal(){
+    const m = document.getElementById('delModal');
+    m.classList.add('hidden');
+    __delCtx = null;
+  }
+  function onBookedCellClick(dayObj, time){
+    showDeleteModal(dayObj, time);
+  }
+
+  // Bind modal buttons & keys
+  (function(){
+    const m = document.getElementById('delModal');
+    const btnCancel = document.getElementById('delCancel');
+    const btnConfirm = document.getElementById('delConfirm');
+    const email = document.getElementById('delEmail');
+    const phone = document.getElementById('delPhone');
+    const pass = document.getElementById('delAdminPass');
+    const err = document.getElementById('delError');
+    if (btnCancel) btnCancel.addEventListener('click', hideDeleteModal);
+    if (btnConfirm) btnConfirm.addEventListener('click', ()=>{
+      if (!__delCtx) return hideDeleteModal();
+      const inputEmail = (email.value||'').trim().toLowerCase();
+      const inputPhone = (phone && phone.value ? phone.value : '').replace(/\D/g,'');
+      const inputPass = (pass.value||'').trim();
+      const storedPhone = (__delCtx.booking.phone||'').replace(/\D/g,'');
+      const ok = (inputPass===ADMIN_PASS)
+        || (inputEmail && inputEmail===(__delCtx.booking.email||'').trim().toLowerCase())
+        || (inputPhone && storedPhone && inputPhone===storedPhone);
+      if (!ok) { err.textContent = 'Credenziali non valide.'; return; }
+      // Delete all keys
+      __delCtx.keys.forEach(k=>{ delete bookings[k]; });
+      localStorage.setItem(STORAGE_KEY_BOOK, JSON.stringify(bookings));
+      hideDeleteModal();
+      renderCalendar();
+    });
+    // Keyboard handling
+    document.addEventListener('keydown', (e)=>{
+      if (m.classList.contains('hidden')) return;
+      if (e.key==='Escape') { e.preventDefault(); hideDeleteModal(); }
+      if (e.key==='Enter') { e.preventDefault(); btnConfirm.click(); }
+    });
+  })();
+
+/* week navigation */
+  document.getElementById('prevWeek').addEventListener('click', ()=>{
+    const prev = addDays(currentWeekStart, -7);
+    currentWeekStart = clampWeekStart(prev);
+    clearSelection();
+    renderCalendar();
+  });
+  document.getElementById('nextWeek').addEventListener('click', ()=>{
+    const next = addDays(currentWeekStart, 7);
+    currentWeekStart = clampWeekStart(next);
+    clearSelection();
+    renderCalendar();
+  });
+  document.getElementById('thisWeek').addEventListener('click', ()=>{
+    const today = new Date();
+    if(today.getFullYear() !== 2025){
+      currentWeekStart = clampWeekStart(MIN_DATE);
+    } else {
+      currentWeekStart = clampWeekStart(today);
+    }
+    clearSelection();
+    renderCalendar();
+  });
+
+  document.getElementById('toggleAdmin').addEventListener('click', ()=>{
+    const card = document.getElementById('adminCard');
+    if(card.classList.contains('hidden')){
+      card.classList.remove('hidden');
+      card.scrollIntoView({behavior:'smooth'});
+    } else {
+      card.classList.add('hidden');
+    }
+  });
+
+/* admin update */
+const ADMIN_PASS = 'valerio2025';
+document.getElementById('updateAvail').addEventListener('click', ()=>{
+  const pass = document.getElementById('adminPassword').value;
+  if(pass !== ADMIN_PASS) return alert('Password errata.');
+  const day = document.getElementById('adminDay').value;
+  const start = document.getElementById('adminStart').value;
+  const end = document.getElementById('adminEnd').value;
+  const start2 = document.getElementById('adminStart2').value;
+  const end2 = document.getElementById('adminEnd2').value;
+  const weekOnly = document.getElementById('adminWeekOnly').checked;
+  if(!start || !end) return alert('Inserisci orari validi.');
+  let newVal;
+  if(start2 && end2){
+    newVal = [[start,end],[start2,end2]];
+  } else {
+    newVal = [start,end];
+  }
+  if(weekOnly){
+    const wk = getWeekKey(currentWeekStart);
+    if(!state.weekOverrides) state.weekOverrides = {};
+    if(!state.weekOverrides[wk]) state.weekOverrides[wk] = {};
+    state.weekOverrides[wk][day] = newVal;
+    localStorage.setItem(STORAGE_KEY_AVAIL_WEEK, JSON.stringify(state.weekOverrides));
+  } else {
+    state.avail[day] = newVal;
+    localStorage.setItem(STORAGE_KEY_AVAIL, JSON.stringify(state.avail));
+  }
+  alert(`Disponibilità aggiornata ${weekOnly?`(solo settimana ${weekNumber(currentWeekStart)})`:''}: ${day} ${start} - ${end}${(start2&&end2)?` e ${start2} - ${end2}`:''}`);
+  renderCalendar();
+});
+document.getElementById('resetDefault').addEventListener('click', ()=>{
+  if(!confirm('Ripristinare le disponibilità predefinite?')) return;
+  state.avail = JSON.parse(JSON.stringify(DEFAULT_AVAIL));
+  localStorage.setItem(STORAGE_KEY_AVAIL, JSON.stringify(state.avail));
+  renderCalendar();
+});
+
+document.getElementById('resetWeek').addEventListener('click', ()=>{
+  if(!confirm('Rimuovere le disponibilità personalizzate della settimana corrente?')) return;
+  const wk = getWeekKey(currentWeekStart);
+  if(state.weekOverrides && state.weekOverrides[wk]){
+    delete state.weekOverrides[wk];
+    localStorage.setItem(STORAGE_KEY_AVAIL_WEEK, JSON.stringify(state.weekOverrides));
+  }
+  renderCalendar();
+});
+
+/* export bookings */
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const dataStr = JSON.stringify(bookings, null, 2);
+  const blob = new Blob([dataStr], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'prenotazioni_2025.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+/* Admin bookings view */
+let __adminUnlocked = false;
+let __cachedRows = [];
+
+function parseKey(k){
+  // format: YYYY-MM-DD_DayName_HH:MM
+  const [ymd, dayName, time] = k.split('_');
+  const [y,m,d] = ymd.split('-').map(n=>parseInt(n,10));
+  const date = new Date(y, m-1, d);
+  return { ymd, dayName, time, date };
+}
+
+function buildAllBookings(){
+  const keys = Object.keys(bookings||{});
+  const seen = new Set();
+  const rows = [];
+  keys.sort();
+  keys.forEach(k=>{
+    if(seen.has(k)) return;
+    const b = bookings[k];
+    if(!b) return;
+    const { ymd, dayName, time, date } = parseKey(k);
+    // find slots for this specific day
+    const dayObj = { name: dayName, date, ymd };
+    const slots = daySlots(dayAvail(dayObj));
+    const idx = slots.indexOf(time);
+    if(idx === -1) return; // not in availability (should be rare)
+    // check if this key is the start of a contiguous block
+    const same = (kk)=>{
+      const bb = bookings[kk];
+      return !!bb && bb.email===b.email && bb.created===b.created;
+    };
+    let startIdx = idx;
+    while(startIdx-1>=0){
+      const prevKey = `${ymd}_${dayName}_${slots[startIdx-1]}`;
+      if(same(prevKey)) { startIdx--; } else { break; }
+    }
+    const startKey = `${ymd}_${dayName}_${slots[startIdx]}`;
+    if(k !== startKey) return; // not a start, skip
+    // expand forward and mark seen
+    let len = 1;
+    seen.add(k);
+    while((startIdx+len) < slots.length){
+      const nextKey = `${ymd}_${dayName}_${slots[startIdx+len]}`;
+      if(same(nextKey)) { seen.add(nextKey); len++; } else { break; }
+    }
+    rows.push({
+      date: ymd,
+      day: dayName,
+      start: time,
+      duration: b.duration || (len*30),
+      name: b.name||'',
+      email: b.email||'',
+      phone: b.phone||'',
+      reason: b.reason||'',
+      created: b.created
+    });
+  });
+  // sort by date then time
+  rows.sort((a,b)=> a.date===b.date ? a.start.localeCompare(b.start) : a.date.localeCompare(b.date));
+  return rows;
+}
+
+function renderBookingsTable(rows){
+  const tbody = document.querySelector('#bkTable tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  var __bkFilterEl = document.getElementById('bkFilter');
+  const filter = ((__bkFilterEl && __bkFilterEl.value) || '').trim().toLowerCase();
+  const match = (r)=>{
+    if(!filter) return true;
+    return (
+      (r.name||'').toLowerCase().includes(filter) ||
+      (r.email||'').toLowerCase().includes(filter) ||
+      (r.phone||'').toLowerCase().includes(filter) ||
+      (r.reason||'').toLowerCase().includes(filter)
+    );
+  };
+  rows.filter(match).forEach(r=>{
+    const tr = document.createElement('tr');
+    const cells = [r.date, r.day, r.start, `${r.duration} min`, r.name, r.email, r.phone, r.reason];
+    cells.forEach(text=>{
+      const td = document.createElement('td');
+      td.textContent = text;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function unlockAdminBookings(){
+  if(__adminUnlocked) return true;
+  var __adminPassEl = document.getElementById('adminPassword');
+  const pass = (__adminPassEl && __adminPassEl.value) || '';
+  if(pass !== ADMIN_PASS){
+    alert('Inserisci la password admin per vedere le prenotazioni.');
+    return false;
+  }
+  __adminUnlocked = true;
+  return true;
+}
+
+function refreshAdminBookings(){
+  __cachedRows = buildAllBookings();
+  renderBookingsTable(__cachedRows);
+}
+
+// Bind admin bookings controls
+(function(){
+  const btnToggle = document.getElementById('toggleBookings');
+  const container = document.getElementById('adminBookings');
+  const btnRefresh = document.getElementById('bkRefresh');
+  const inputFilter = document.getElementById('bkFilter');
+  const btnCsv = document.getElementById('bkExportCsv');
+  if(btnToggle){
+    btnToggle.addEventListener('click', ()=>{
+      if(container.classList.contains('hidden')){
+        if(!unlockAdminBookings()) return;
+        container.classList.remove('hidden');
+        btnToggle.textContent = 'Nascondi prenotazioni';
+        refreshAdminBookings();
+      } else {
+        container.classList.add('hidden');
+        btnToggle.textContent = 'Mostra prenotazioni';
+      }
+    });
+  }
+  if(btnRefresh){
+    btnRefresh.addEventListener('click', ()=>{
+      if(!unlockAdminBookings()) return;
+      refreshAdminBookings();
+    });
+  }
+  if(inputFilter){
+    inputFilter.addEventListener('input', ()=>{
+      renderBookingsTable(__cachedRows);
+    });
+  }
+  if(btnCsv){
+    btnCsv.addEventListener('click', ()=>{
+      if(!unlockAdminBookings()) return;
+      const rows = (__cachedRows||[]);
+      var __bkFilterEl2 = document.getElementById('bkFilter');
+      const filter = ((
+        __bkFilterEl2 && __bkFilterEl2.value
+      )||'').trim().toLowerCase();
+      const match = (r)=>{
+        if(!filter) return true;
+        return (
+          (r.name||'').toLowerCase().includes(filter) ||
+          (r.email||'').toLowerCase().includes(filter) ||
+          (r.phone||'').toLowerCase().includes(filter) ||
+          (r.reason||'').toLowerCase().includes(filter)
+        );
+      };
+      const out = ['Data,Giorno,Ora inizio,Durata,Nome,Email,Telefono,Note'];
+      rows.filter(match).forEach(r=>{
+        const esc = (v)=>`"${(v||'').toString().replace(/"/g,'""')}"`;
+        out.push([r.date, r.day, r.start, `${r.duration}`, r.name, r.email, r.phone, r.reason].map(esc).join(','));
+      });
+      const blob = new Blob([out.join('\n')], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'prenotazioni_2025.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+  }
+})();
+
+/* booking code feature removed: keeping only lookup by email/phone */
+
+/* lookup by email/phone (contact) */
+(function(){
+  const btn = document.getElementById('lookupContactBtn');
+  const input = document.getElementById('lookupContact');
+  const out = document.getElementById('lookupContactResult');
+  if(!btn || !input || !out) return;
+  const normPhone = (v)=> (v||'').replace(/\D/g,'');
+  const nextUpcoming = (arr)=>{
+    const now = new Date();
+    arr.sort((a,b)=> a.dateObj - b.dateObj || a.time.localeCompare(b.time));
+    for(const r of arr){ if(r.dateObj>=startOfISOWeek(now) || r.dateObj.toDateString()===now.toDateString()) return r; }
+    return arr[0]||null;
+  };
+  const collectByContact = (needle)=>{
+    const emailNeedle = (needle||'').trim().toLowerCase();
+    const phoneNeedle = normPhone(needle);
+    const rows = [];
+    const keys = Object.keys(bookings||{}).sort();
+    const seen = new Set();
+    keys.forEach(k=>{
+      if(seen.has(k)) return;
+      const b = bookings[k]; if(!b) return;
+      const matchEmail = emailNeedle && (b.email||'').trim().toLowerCase()===emailNeedle;
+      const matchPhone = phoneNeedle && normPhone(b.phone||'')===phoneNeedle;
+      if(!(matchEmail||matchPhone)) return;
+      const { ymd, dayName, time, date } = parseKey(k);
+      const dayObj = { name: dayName, date, ymd };
+      const slots = daySlots(dayAvail(dayObj));
+      const idx = slots.indexOf(time);
+      if(idx===-1) return;
+      const same = (kk)=>{ const bb = bookings[kk]; return !!bb && bb.email===b.email && bb.created===b.created; };
+      let startIdx = idx; while(startIdx-1>=0){ const pk = `${ymd}_${dayName}_${slots[startIdx-1]}`; if(same(pk)) startIdx--; else break; }
+      const startKey = `${ymd}_${dayName}_${slots[startIdx]}`; if(k!==startKey) return;
+      let len=1; seen.add(k); while((startIdx+len)<slots.length){ const nk = `${ymd}_${dayName}_${slots[startIdx+len]}`; if(same(nk)) { seen.add(nk); len++; } else break; }
+      rows.push({ ymd, dayName, time, duration: b.duration||len*30, dateObj: date });
+    });
+    return rows;
+  };
+  btn.addEventListener('click', (e)=>{
+    e.preventDefault();
+    const q = (input.value||'').trim();
+    if(!q){ out.textContent = 'Inserisci email o cellulare.'; return; }
+    const rows = collectByContact(q);
+    if(!rows.length){ out.textContent = 'Nessuna prenotazione trovata.'; return; }
+    const r = nextUpcoming(rows);
+    const [Y,M,D] = r.ymd.split('-').map(n=>parseInt(n,10));
+    const date = new Date(Y, M-1, D);
+    out.textContent = `Prenotazione: ${formatLabel(date)} alle ${r.time}`;
+  });
+})();
+
+/* rileva WhatsApp in-app browser e mostra banner di avviso */
+(function(){
+  var ua = (navigator.userAgent||'').toLowerCase();
+  var isWhatsApp = ua.includes('whatsapp');
+  var warn = document.getElementById('uaWarning');
+  if (isWhatsApp && warn) {
+    warn.style.display = 'block';
+  }
+  // Previeni eventuali link verso WhatsApp dall'aprirsi nel webview
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('a[href]');
+    if(!a) return;
+    var href = a.getAttribute('href')||'';
+    if (/^\s*(whatsapp:|https?:\/\/(?:wa\.me|api\.whatsapp\.com))/i.test(href)) {
+      e.preventDefault();
+      alert('Per usare WhatsApp, apri questa pagina in Safari.');
+    }
+  }, {passive:false});
+})();
+
+/* initialize (robusto per iPhone) */
+try { renderCalendar(); } catch(e){ if(window.__showErr) window.__showErr(e.message||String(e)); }
+document.addEventListener('DOMContentLoaded', function(){
+  try { renderCalendar(); } catch(e){ if(window.__showErr) window.__showErr(e.message||String(e)); }
+});
+</script>
+</body>
+</html>
